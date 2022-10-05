@@ -1,0 +1,92 @@
+Train:
+  Base:
+    use_cuda: True
+    basedir: './logs'
+    expname: 'min_max_norm'
+    seed: 0
+    lrate: 5e-4
+    lrate_decay: 500
+    max_train_views: 5
+    chunk: 32768                              # 1024*32
+    pixel_interp_mode: 'nearest'
+    # Consistency loss options
+    consistency_loss: True
+    # Rendering
+    render_autocast: False
+    render_loss_interval: 50
+    render_nH: 224
+    render_nW: 224
+    render_jitter_rays: True
+    precrop_iters: 500
+    precrop_frac: 0.5
+    #Visualize
+    wandb: True
+    N_iters: 200000
+    print_iters: 50
+    save_iters: 10000
+    video_iters: 20000
+    testset_iters: 50000
+    log_iters: 1
+    log_raw_hist_iters: 100
+    img_iters: 500
+
+  Dataset:
+    dataset_type: 'llff'
+    datadir: '../nerf_llff_data/fern'
+    factor: 8
+    spherify: False
+    llffhold: 8
+    no_ndc: False                            # do not use normalized device coordinates (set for non-forward facing scenes)
+    half_res: True
+    testskip: 8
+    num_render_poses: 40
+    white_bkgd: True
+  
+  Model:
+    load_weight: False
+    multires: 10
+    multires_views: 4
+    i_embed: 0
+    netchunk_per_gpu: 262144                 # 1024*64*4
+    N_samples: 64
+    perturb: 1.0
+    raw_noise_std: 0.0
+    N_rand: 4096
+    use_softplus_alpha: False
+    checkpoint_rendering: True
+    # coarase
+    netdepth: 8
+    netwidth: 256
+    # fine 
+    use_viewdirs: True
+    N_importance: 128
+    netdepth_fine: 8
+    netwidth_fine: 256
+  
+  Custom:
+    rel_depth_path: './llff_rel_depths/'
+    num_total_views: 20
+
+    
+# no_batching = True
+
+# ## Additional arguments
+# i_log_raw_hist = 100
+# save_splits = True
+# checkpoint_rendering = True/
+# ## Computational options relevant for rendering
+# feature_interp_mode = bilinear
+# checkpoint_rendering = True
+
+# ## Shared rendering loss options
+# render_poses = uniform
+# render_theta_range = [-180, 180]
+# render_phi_range = [-90, 0]
+# render_radius_range = [3.5, 4.5]
+
+# ## Consistency loss options
+# consistency_loss = 'consistent_with_target_rep'
+# consistency_loss_lam = 0.1
+# consistency_loss_lam0 = 0.1
+# consistency_model_type = clip_vit
+# consistency_size = 224
