@@ -87,11 +87,15 @@ def data_loader(data_cfg, device):
 
     else:
         raise Exception('Unknown dataset type', data_cfg.dataset_type, 'exiting')
-
+    
+    print('TRAIN views are', i_train)
+    print('TEST views are', i_test)
+    print('VAL views are', i_val)
+    
     return i_train, i_val, i_test, torch.Tensor(images).to(device), torch.Tensor(poses).to(device), torch.Tensor(render_poses).to(device), hwf, near, far 
 
 
-def baseline_model_load(model_cfg, device):
+def baseline_model_load(model_cfg, device, no_ndc):
     model = {}
     parameter = []
     
@@ -162,12 +166,18 @@ def baseline_model_load(model_cfg, device):
         'alpha_act_fn' : F.softplus if model_cfg.use_softplus_alpha else F.relu
     }
     
+    # NDC only good for LLFF-style forward facing data
+    if no_ndc:
+        print('Not ndc!')
+        render_kwargs_train['ndc'] = False
+        render_kwargs_train['lindisp'] = model_cfg.lindisp
     # test 
     render_kwargs_test = {k : render_kwargs_train[k] for k in render_kwargs_train}
     render_kwargs_test['perturb'] = False
     render_kwargs_test['raw_noise_std'] = 0.
     
     return  model, parameter, render_kwargs_train, render_kwargs_test
+    
 
 def get_rel_depths(path, total_num_view):
     rel_depths_list = []

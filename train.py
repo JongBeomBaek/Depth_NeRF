@@ -15,7 +15,7 @@ import initialize
 import utils
 
 parser = argparse.ArgumentParser(description='arguments yaml load')
-parser.add_argument("--conf",
+parser.add_argument("--config",
                     type=str,
                     help="configuration file path",
                     default="./config/train_llff.yaml")
@@ -25,7 +25,7 @@ args = parser.parse_args()
 if __name__ == "__main__":
     torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
-    with open(args.conf, 'r') as f:
+    with open(args.config, 'r') as f:
         # configuration
         conf =  yaml.load(f, Loader=yaml.FullLoader)
         train_cfg = DotMap(conf['Train'])
@@ -40,7 +40,9 @@ if __name__ == "__main__":
         H, W, focal = int(hwf[0]), int(hwf[1]), hwf[-1] #torch.Tensor(hwf[-1:]).to(device)
 
         # model load
-        model, parameters, render_kwargs_train, render_kwargs_test = initialize.baseline_model_load(train_cfg.Model, device)
+        model, parameters, render_kwargs_train, render_kwargs_test = initialize.baseline_model_load(train_cfg.Model, device, (train_cfg.Dataset.dataset_type != 'llff' or train_cfg.Dataset.no_ndc))
+        render_kwargs_train.update({'near' : near, 'far' : far})
+        render_kwargs_test.update({'near' : near, 'far' : far})
 
         # optimizer = torch.optim.Adam([{"params": affine_params, "lr": 0.00001}, 
         #                         {"params": parameters}], args.lrate, betas=(0.9, 0.999))
@@ -54,18 +56,17 @@ if __name__ == "__main__":
             wandb.watch(model['coarse'])
 
         #relative depth set
-        rel_depths = initialize.get_rel_depths(train_cfg.Custom.rel_depth_path, train_cfg.Custom.num_total_views).to(device)
+        # rel_depths = initialize.get_rel_depths(train_cfg.Custom.rel_depth_path, train_cfg.Custom.num_total_views).to(device)
         
         start = 1 
         N_iters = train_cfg.Base.N_iters + 1
-        import time
         for i in trange(start, N_iters):
             index = np.random.randint(train_cfg.Base.max_train_views)
             img_i = i_train[index]
             target = images[img_i]
             pose = poses[img_i, :3,:4]
             rays_o, rays_d = utils.get_rays(H, W, focal, torch.Tensor(pose))  # (H, W, 3), (H, W, 3)
-            rel_depth = rel_depths[img_i]
+            # rel_depth = rel_depths[img_i]
 
             # rays_o, rays_d = utils.get_rays(H, W, focal, pose)  # (H, W, 3), (H, W, 3)
             batch_rays, select_coords = utils.sample_rays(H, W, rays_o, rays_d, N_rand=train_cfg.Model.N_rand,
@@ -74,7 +75,7 @@ if __name__ == "__main__":
             batch_rays = batch_rays.to(device)
             target_s = target[select_coords[:, 0], select_coords[:, 1]]  # (N_rand, 3)
             target_s = target_s.to(device)
-            rel_depth_s = (rel_depth[select_coords[:, 0], select_coords[:, 1]]).to(device)
+            # rel_depth_s = (rel_depth[select_coords[:, 0], select_coords[:, 1]]).to(device)
 
             # Representational consistency loss with rendered image
             if train_cfg.Base.consistency_loss and i % train_cfg.Base.render_loss_interval == 0:
@@ -88,7 +89,7 @@ if __name__ == "__main__":
                                     rays=(rays[0].to(device), rays[1].to(device)),
                                     keep_keys=consistency_keep_keys,
                                     **render_kwargs_train)[-1]      
-                                  
+                    
                     # rgb0 is the rendering from the coarse network, while rgb_map uses the fine network
                     if train_cfg.Model.N_importance > 0:
                         disps = torch.stack([extras['disp_map'], extras['disp0']], dim=0) #torch.Size([2, 168, 168, 3])
@@ -102,17 +103,15 @@ if __name__ == "__main__":
             rgb, disp, acc, extras = utils.render(H, W, focal, train_cfg.Base.chunk, rays=batch_rays,
                                         verbose=i < 10, retraw=True,
                                         **render_kwargs_train)
-                
+            
             img_loss = utils.img2mse(rgb, target_s)
             trans = extras['raw'][...,-1]
             loss += img_loss
             psnr = utils.mse2psnr(img_loss)
-
-            nan_mask = ~disp.isnan()
             # temp = torch.abs(utils.min_max_norm(rel_depth_s[nan_mask]).detach() - utils.min_max_norm(disp[nan_mask]))
-            temp = torch.abs(rel_depth_s[nan_mask].detach() - disp[nan_mask])
+            # temp = torch.abs(rel_depth_s[nan_mask].detach() - disp[nan_mask])
             # pdb.set_trace()
-            loss += temp.mean()
+            # loss += temp.mean()
             # loss += torch.abs(utils.min_max_norm(rel_depth_s[nan_mask]).detach() - utils.min_max_norm(disp[nan_mask])).mean()
 
             if 'rgb0' in extras:
@@ -121,8 +120,13 @@ if __name__ == "__main__":
                 img_loss0 = utils.img2mse(extras['rgb0'], target_s)
                 loss += img_loss0
                 psnr0 = utils.mse2psnr(img_loss0)
-                # loss += torch.abs(utils.min_max_norm(rel_depth_s[nan_mask]).detach() - utils.min_max_norm(extras['disp0'])).mean()
 
+                # nan_mask = ~extras['disp0'].isnan()
+                # depth_loss = torch.abs(utils.min_max_norm(rel_depth_s[nan_mask]).detach() - utils.min_max_norm(extras['disp0'][nan_mask])).mean()
+                # depth_loss = torch.abs(rel_depth_s[nan_mask].detach() - extras['disp0'][nan_mask]).mean()
+                # loss += depth_loss
+                # pdb.set_trace()
+            # print(f'coarse{img_loss0}, fine:{img_loss}')
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()

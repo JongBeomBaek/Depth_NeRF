@@ -345,6 +345,7 @@ def render_rays(ray_batch,
         mids = .5 * (z_vals[...,1:] + z_vals[...,:-1])
         upper = torch.cat([mids, z_vals[...,-1:]], -1)
         lower = torch.cat([z_vals[...,:1], mids], -1)
+
         # stratified samples in those intervals
         t_rand = torch.rand(z_vals.shape)
 
@@ -510,7 +511,6 @@ def render_path(render_poses, hwf, chunk, render_kwargs, gt_imgs=None, savedir=N
     disps = []
 
     for i, c2w in enumerate(tqdm(render_poses)):
-        # import pdb; pdb.set_trace()
         rgb, disp, acc, _ = render(int(H), int(W), focal, chunk=chunk, c2w=c2w[:3,:4], **render_kwargs)
         rgbs.append(rgb.cpu().numpy())
         disps.append(disp.cpu().numpy())

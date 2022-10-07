@@ -60,7 +60,7 @@ def load_blender_data(basedir, half_res=False, testskip=1, num_render_poses=40):
             skip = 1
         else:
             skip = testskip
-            
+
         for frame in meta['frames'][::skip]:
             fname = os.path.join(basedir, frame['file_path'] + '.png')
             imgs.append(imageio.imread(fname))
